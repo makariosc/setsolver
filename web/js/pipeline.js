@@ -23,17 +23,25 @@ export const backends = {};
 async function fetchWithProgress(url, onProgress) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+  // Content-Length is only a progress estimate: servers like GitHub Pages gzip the
+  // models, and then it is the *compressed* size while the body arrives decoded.
   const total = Number(res.headers.get("Content-Length")) || 0;
   if (!res.body || !total) return new Uint8Array(await res.arrayBuffer());
   const reader = res.body.getReader();
-  const buf = new Uint8Array(total);
+  const chunks = [];
   let got = 0;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    buf.set(value, got);
+    chunks.push(value);
     got += value.length;
-    onProgress?.(got / total);
+    onProgress?.(Math.min(got / total, 0.99));
+  }
+  const buf = new Uint8Array(got);
+  let off = 0;
+  for (const c of chunks) {
+    buf.set(c, off);
+    off += c.length;
   }
   return buf;
 }
