@@ -39,6 +39,12 @@ jobs:
           for f in $(python3 -c "import json; m=json.load(open('web/models/meta.json')); print(m['detector']['file'], m['classifier']['file'])"); do
             cp "web/models/$f" _site/models/
           done
+          # cache-bust: Pages lets browsers cache files for 10 min, so stamp this
+          # commit onto the script/stylesheet URLs (and the modules' imports)
+          v=${GITHUB_SHA::8}
+          sed -i "s|href=\"app.css\"|href=\"app.css?v=$v\"|; s|src=\"js/app.js\"|src=\"js/app.js?v=$v\"|" _site/index.html
+          sed -i -E "s|from \"\./([a-z]+)\.js\"|from \"./\1.js?v=$v\"|g" _site/js/*.js
+          grep -n "?v=" _site/index.html _site/js/*.js
           ls -laR _site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

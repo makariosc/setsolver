@@ -21,7 +21,7 @@ const sessions = {};
 export const backends = {};
 
 async function fetchWithProgress(url, onProgress) {
-  const res = await fetch(url);
+  const res = await fetch(url, { cache: "no-cache" });  // revalidate: a new deploy may swap the model
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
   // Content-Length is only a progress estimate: servers like GitHub Pages gzip the
   // models, and then it is the *compressed* size while the body arrives decoded.
@@ -63,7 +63,7 @@ async function createSession(bytes) {
 
 /** Load both models. onProgress(fraction 0..1, label). */
 export async function loadModels(onProgress) {
-  meta = await (await fetch("models/meta.json")).json();
+  meta = await (await fetch("models/meta.json", { cache: "no-cache" })).json();
   const parts = [["detector", meta.detector.file], ["classifier", meta.classifier.file]];
   for (const [i, [name, file]] of parts.entries()) {
     const bytes = await fetchWithProgress(`models/${file}`, (f) => onProgress?.((i + f * 0.9) / parts.length, `Loading ${name}…`));
