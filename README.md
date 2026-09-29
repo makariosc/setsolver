@@ -178,6 +178,15 @@ worth it (dynamic int8 breaks the classifier; static int8 changes a few cards
 and is slower than fp32 on WebGPU). fp16 keeps GlobalAveragePool in fp32:
 WebGPU accumulates in fp16 and the classifier then misreads nearly every card.
 
+**Live site (GitHub Pages):** https://makariosc.github.io/setsolver/ — deployed by
+`.github/workflows/pages.yml` on every push to `main` that touches `web/`. It
+publishes the app plus the two models `web/models/meta.json` names (the fp16
+pair, committed to the repo; other exports stay git-ignored). To ship a new
+model: export it, run `scripts/quantize_models.py --install fp16`, commit
+`web/models/{meta.json,detector_fp16.onnx,classifier_fp16.onnx}`, push.
+Pages can't send the COOP/COEP headers, so the WASM fallback runs
+single-threaded there; WebGPU (the normal path) is unaffected.
+
 `web/js/pipeline.js` mirrors `src/setsolver/crops.py` (same corner ordering
 and straightening), so browser crops match what the classifier was trained on.
 

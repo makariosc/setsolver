@@ -1,0 +1,44 @@
+[project]
+name = "setsolver"
+version = "0.1.0"
+description = "SET card detection/classification trained on synthetic photos"
+readme = "README.md"
+authors = [
+    { name = "Makarios Chung", email = "makarios@nex.inc" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.5.3",
+    "opencv-python>=4.10",  # full build: Ultralytics depends on it, and both provide cv2
+]
+
+[project.scripts]
+setsolver = "setsolver:main"
+
+[build-system]
+requires = ["uv_build>=0.10.9,<0.11.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+train = [
+    "ultralytics>=8.4",
+    "torch>=2.5",
+    "torchvision>=0.20",
+    "onnx>=1.17",
+    "onnxruntime>=1.20",
+    "onnxslim>=0.1.50",
+]
+
+# The GPU box runs NVIDIA driver 535 (CUDA <= 12.2, with 12.x minor-version
+# compatibility), so pin Linux torch to CUDA 12.6 builds; macOS uses PyPI (MPS).
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu126", marker = "sys_platform == 'linux'" }]
+torchvision = [{ index = "pytorch-cu126", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true

@@ -1,0 +1,29 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# generated data
+data/
+
+# exported models (regenerate with scripts/export_onnx.py); the fp16 pair the
+# web app loads (see web/models/meta.json) is committed so GitHub Pages can serve it
+web/models/*.onnx
+!web/models/detector_fp16.onnx
+!web/models/classifier_fp16.onnx
+# fp16/int8 variants + bench inputs (crops of personal photos)
+web/models/variants/
+
+# training runs, logs, scratch photos
+runs/
+logs/
+/*.jpg
+/*.jpeg
+/*.png
+.DS_Store

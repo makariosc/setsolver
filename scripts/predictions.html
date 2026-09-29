@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Detector Predictions</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface-1: #fcfcfb; --text-primary: #0b0b0b; --text-secondary: #52514e;
+    --text-muted: #898781; --grid: #e1e0d9; --border: rgba(11, 11, 11, 0.10); --accent: #2a78d6;
+    --good: #006300; --serious: #b54d1f; --scrim: rgba(0, 0, 0, 0.82);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface-1: #1a1a19; --text-primary: #ffffff; --text-secondary: #c3c2b7;
+      --text-muted: #898781; --grid: #2c2c2a; --border: rgba(255, 255, 255, 0.10); --accent: #3987e5;
+      --good: #0ca30c; --serious: #ec835a;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface-1: #1a1a19; --text-primary: #ffffff; --text-secondary: #c3c2b7;
+    --text-muted: #898781; --grid: #2c2c2a; --border: rgba(255, 255, 255, 0.10); --accent: #3987e5;
+    --good: #0ca30c; --serious: #ec835a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--text-primary);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-variant-numeric: tabular-nums; }
+  main { max-width: 1320px; margin: 0 auto; padding: 20px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 12px; }
+  h1 { font-size: 20px; margin: 0; font-weight: 650; }
+  .sub { color: var(--text-secondary); }
+  .navlink { margin-left: auto; color: var(--accent); text-decoration: none; font-size: 13px; }
+  .navlink:hover { text-decoration: underline; }
+
+  .filters { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 16px; }
+  .filters label { color: var(--text-secondary); font-size: 13px; display: flex; gap: 6px; align-items: center; }
+  select, .seg button { font: inherit; font-size: 13px; color: var(--text-primary); background: var(--surface-1);
+    border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; }
+  .seg { display: inline-flex; }
+  .seg button { border-radius: 0; cursor: pointer; }
+  .seg button + button { border-left: 0; }
+  .seg button:first-child { border-radius: 6px 0 0 6px; }
+  .seg button:last-child { border-radius: 0 6px 6px 0; }
+  .seg button[aria-pressed="true"] { background: var(--text-primary); color: var(--surface-1); }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; }
+  .tile { padding: 14px 16px; }
+  .tile .label { color: var(--text-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .tile .value { font-size: 26px; font-weight: 650; margin-top: 2px; }
+  .tile .detail { color: var(--text-secondary); font-size: 13px; }
+  .meta { color: var(--text-muted); font-size: 12px; margin: -6px 0 14px; }
+
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
+  .item { overflow: hidden; display: flex; flex-direction: column; }
+  .item button.thumb { all: unset; cursor: zoom-in; display: block; background: var(--page); }
+  .item button.thumb:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .item img { display: block; width: 100%; height: 300px; object-fit: contain; }
+  .cap { padding: 8px 12px 10px; border-top: 1px solid var(--border); }
+  .cap .name { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cap .row { display: flex; justify-content: space-between; gap: 8px; color: var(--text-secondary); font-size: 12.5px; margin-top: 2px; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
+  .badge.ok { color: var(--good); }
+  .badge.off { color: var(--serious); }
+  .badge.unk { color: var(--text-secondary); font-weight: 500; }
+  .empty { color: var(--text-secondary); padding: 40px 0; text-align: center; }
+
+  .lightbox { position: fixed; inset: 0; background: var(--scrim); display: none; z-index: 20;
+    flex-direction: column; align-items: center; justify-content: center; padding: 16px; }
+  .lightbox.open { display: flex; }
+  .lightbox img { max-width: 100%; max-height: calc(100vh - 110px); object-fit: contain; border-radius: 6px; background: #000; }
+  .lb-bar { display: flex; gap: 12px; align-items: center; color: #fff; margin-top: 10px; font-size: 13px; flex-wrap: wrap; justify-content: center; }
+  .lb-bar button { font: inherit; font-size: 13px; color: #fff; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2);
+    border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  .lb-bar .hint { color: #bbb; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Detector Predictions</h1>
+    <span class="sub" id="subtitle">real photos</span>
+    <a class="navlink" href="/">← Training dashboard</a>
+  </header>
+
+  <div class="filters">
+    <label>Set <select id="setSelect"></select></label>
+    <label>Show
+      <span class="seg" role="group" aria-label="Image view" id="viewSeg">
+        <button type="button" data-v="pred" aria-pressed="true">Predictions</button>
+        <button type="button" data-v="orig" aria-pressed="false">Originals</button>
+        <button type="button" data-v="cards" aria-pressed="false" id="cardsBtn" hidden>Card crops</button>
+      </span>
+    </label>
+    <label>Filter
+      <span class="seg" role="group" aria-label="Filter" id="filterSeg">
+        <button type="button" data-f="all" aria-pressed="true">All</button>
+        <button type="button" data-f="known" aria-pressed="false">Known count</button>
+        <button type="button" data-f="unknown" aria-pressed="false">Unknown count</button>
+        <button type="button" data-f="off" aria-pressed="false">Mismatches</button>
+      </span>
+    </label>
+  </div>
+
+  <div class="tiles" id="tiles"></div>
+  <div class="meta" id="meta"></div>
+  <div class="gallery" id="gallery"></div>
+</main>
+
+<div class="lightbox" id="lb" role="dialog" aria-modal="true" aria-label="Image viewer">
+  <img id="lbImg" alt="">
+  <div class="lb-bar">
+    <button type="button" id="lbPrev">← Prev</button>
+    <span id="lbCap"></span>
+    <button type="button" id="lbToggle">Show original (O)</button>
+    <button type="button" id="lbNext">Next →</button>
+    <button type="button" id="lbClose">Close (Esc)</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") e.className = v; else e.setAttribute(k, v);
+  }
+  for (const k of kids) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return e;
+}
+const state = { sets: [], set: null, view: "pred", filter: "all", visible: [], lb: -1, lbView: "pred" };
+
+function status(it) {
+  if (it.truth == null) return { cls: "unk", text: `${it.n} found · count unknown` };
+  if (it.n === it.truth) return { cls: "ok", text: `✓ ${it.n} of ${it.truth} found` };
+  return it.n < it.truth
+    ? { cls: "off", text: `⚠ ${it.n} found, ${it.truth} expected` }
+    : { cls: "off", text: `⚠ ${it.n} found, ${it.truth} expected (+${it.n - it.truth})` };
+}
+const hasCls = (set) => !!set.classifier;
+const src = (set, it, view) => {
+  const v = view === "cards" && !(hasCls(set) && it.n) ? "pred" : view;  // no crop sheet without cards
+  return `/files/${set.path}/${v}/${it.stem}.jpg?t=${Math.floor(set.created)}`;
+};
+
+function renderTiles(set) {
+  const imgs = set.images;
+  const known = imgs.filter((i) => i.truth != null);
+  const found = known.reduce((a, i) => a + Math.min(i.n, i.truth), 0);
+  const expected = known.reduce((a, i) => a + i.truth, 0);
+  const extra = known.reduce((a, i) => a + Math.max(0, i.n - i.truth), 0);
+  const ms = imgs.slice(1).map((i) => i.ms).sort((a, b) => a - b);  // first image includes warm-up
+  const confs = imgs.flatMap((i) => i.confs);
+  const tile = (label, value, detail) => el("div", { class: "card tile" },
+    el("div", { class: "label" }, label), el("div", { class: "value" }, value), el("div", { class: "detail" }, detail));
+  $("tiles").replaceChildren(
+    tile("Cards found", expected ? `${found} / ${expected}` : "–",
+      `${known.length} photos with known counts · ${extra} extra detection${extra === 1 ? "" : "s"}`),
+    tile("Photos", String(imgs.length), `${imgs.length - known.length} with unknown counts (review by eye)`),
+    tile("Detections", String(confs.length),
+      confs.length ? `confidence ${Math.min(...confs).toFixed(2)}–${Math.max(...confs).toFixed(2)} · ${confs.filter((c) => c < 0.7).length} below 0.70` : ""),
+    tile("Inference", ms.length ? `${ms[Math.floor(ms.length / 2)].toFixed(1)} ms` : "–",
+      `median per photo at ${set.imgsz}px · max ${ms.length ? ms[ms.length - 1].toFixed(1) : "–"} ms`),
+  );
+  if (hasCls(set)) {
+    const cards = imgs.flatMap((i) => i.cards || []);
+    const classified = cards.filter((c) => c.number != null);
+    const cut = cards.filter((c) => c.cut_off).length;
+    const least = classified.reduce((m, c) => (m && m.min_p <= c.min_p ? m : c), null);
+    const cms = imgs.slice(1).map((i) => i.cls_ms).filter(Boolean).sort((a, b) => a - b);
+    $("tiles").append(
+      tile("Cards classified", String(classified.length),
+        `${cut} cut off by the frame (not classified)` + (cms.length ? ` · ${cms[Math.floor(cms.length / 2)].toFixed(1)} ms per photo` : "")),
+      tile("Known attributes", set.attr_n ? `${set.attr_card_ok} / ${set.attr_n}` : "–",
+        set.attr_n ? `cards with all 4 attributes right · ` + Object.entries(set.attr_ok).map(([k, v]) => `${k} ${v}/${set.attr_n}`).join(" · ") : "no attribute labels for this set"),
+      tile("Least sure card", least ? least.min_p.toFixed(2) : "–",
+        least ? `${least.number} ${least.color} ${least.shape} ${least.shading} · unsure about ${least.least_sure}` : ""),
+    );
+  }
+  $("meta").textContent = `weights: ${set.weights} · confidence threshold ${set.conf} · created ${new Date(set.created * 1000).toLocaleString()}`;
+}
+
+function renderGallery() {
+  const set = state.set;
+  const f = state.filter;
+  state.visible = set.images.filter((i) =>
+    f === "all" || (f === "known" && i.truth != null) || (f === "unknown" && i.truth == null) ||
+    (f === "off" && i.truth != null && i.n !== i.truth));
+  const g = $("gallery");
+  if (!state.visible.length) {
+    g.replaceChildren(el("div", { class: "empty" }, f === "off" ? "No mismatches: every photo with a known count is fully correct." : "No photos."));
+    return;
+  }
+  g.replaceChildren(...state.visible.map((it, idx) => {
+    const st = status(it);
+    const thumb = el("button", { class: "thumb", type: "button", "aria-label": `Open ${it.file}` },
+      el("img", { src: src(set, it, state.view), alt: `${it.file}, ${st.text}`, loading: "lazy" }));
+    thumb.addEventListener("click", () => openLb(idx));
+    let confs = it.confs.length ? `conf ${Math.min(...it.confs).toFixed(2)}–${Math.max(...it.confs).toFixed(2)}` : "no detections";
+    if (hasCls(set) && it.cards) {
+      const cl = it.cards.filter((c) => c.number != null);
+      if (cl.length) confs = `attributes p ≥ ${Math.min(...cl.map((c) => c.min_p)).toFixed(2)}`;
+      if (it.cut_off) confs += ` · ${it.cut_off} cut off`;
+    }
+    return el("div", { class: "card item" }, thumb,
+      el("div", { class: "cap" },
+        el("div", { class: "name", title: it.file }, it.file),
+        el("div", { class: "row" }, el("span", { class: `badge ${st.cls}` }, st.text), el("span", {}, confs)),
+        ...(it.attr_scored ? [el("div", { class: "row" }, el("span", { class: `badge ${it.attr_correct === it.attr_scored ? "ok" : "off"}` },
+          `${it.attr_correct === it.attr_scored ? "✓" : "⚠"} attributes ${it.attr_correct}/${it.attr_scored} right (labeled)`))] : [])));
+  }));
+}
+
+function openLb(idx) { state.lb = idx; state.lbView = state.view; $("lb").classList.add("open"); showLb(); $("lbClose").focus(); }
+function closeLb() { $("lb").classList.remove("open"); state.lb = -1; }
+function showLb() {
+  const it = state.visible[state.lb];
+  $("lbImg").src = src(state.set, it, state.lbView);
+  $("lbImg").alt = it.file;
+  const names = { pred: "prediction", orig: "original", cards: "card crops" };
+  $("lbCap").textContent = `${it.file} · ${status(it).text} · ${state.lb + 1}/${state.visible.length} · ${names[state.lbView]}`;
+  $("lbToggle").textContent = "Next view (O)";
+}
+function step(d) { state.lb = (state.lb + d + state.visible.length) % state.visible.length; showLb(); }
+$("lbPrev").addEventListener("click", () => step(-1));
+$("lbNext").addEventListener("click", () => step(1));
+$("lbClose").addEventListener("click", closeLb);
+$("lbToggle").addEventListener("click", () => {
+  const views = hasCls(state.set) ? ["pred", "orig", "cards"] : ["pred", "orig"];
+  state.lbView = views[(views.indexOf(state.lbView) + 1) % views.length]; showLb();
+});
+$("lb").addEventListener("click", (e) => { if (e.target === $("lb")) closeLb(); });
+document.addEventListener("keydown", (e) => {
+  if (state.lb < 0) return;
+  if (e.key === "Escape") closeLb();
+  else if (e.key === "ArrowLeft") step(-1);
+  else if (e.key === "ArrowRight") step(1);
+  else if (e.key.toLowerCase() === "o") $("lbToggle").click();
+});
+
+function segment(id, key, attr) {
+  $(id).querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+    state[key] = b.dataset[attr];
+    $(id).querySelectorAll("button").forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
+    renderGallery();
+  }));
+}
+segment("viewSeg", "view", "v");
+segment("filterSeg", "filter", "f");
+$("setSelect").addEventListener("change", (e) => { state.set = state.sets.find((s) => s.path === e.target.value); render(); });
+
+function render() {
+  const set = state.set;
+  $("subtitle").textContent = `${set.name} · ${set.images.length} photos` + (hasCls(set) ? " · detector + classifier" : "");
+  $("cardsBtn").hidden = !hasCls(set);
+  if (!hasCls(set) && state.view === "cards") document.querySelector('#viewSeg [data-v="pred"]').click();
+  renderTiles(set);
+  renderGallery();
+}
+
+(async function init() {
+  try {
+    state.sets = await (await fetch("/api/predictions", { cache: "no-store" })).json();
+  } catch (e) {
+    $("gallery").replaceChildren(el("div", { class: "empty" }, `Could not load predictions (${e.message}).`));
+    return;
+  }
+  if (!state.sets.length) {
+    $("gallery").replaceChildren(el("div", { class: "empty" }, "No prediction sets yet. Run scripts/predict_detector.py --out preds/<name>."));
+    return;
+  }
+  $("setSelect").replaceChildren(...state.sets.map((s) => el("option", { value: s.path }, `${s.name} (${s.images.length} photos)`)));
+  state.set = state.sets[0];
+  render();
+})();
+</script>
+</body>
+</html>

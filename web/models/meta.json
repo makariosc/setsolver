@@ -1,0 +1,71 @@
+{
+ "created": "2026-09-28 11:17:23",
+ "detector": {
+  "file": "detector_fp16.onnx",
+  "imgsz": 640,
+  "keypoints": 4,
+  "conf": 0.5,
+  "input": "images",
+  "output": "output0",
+  "output_shape": [
+   1,
+   17,
+   8400
+  ],
+  "source": "runs/pose/runs/detector/y26n_640_distr/weights/best.pt",
+  "size_mb": 5.21,
+  "precision": "fp16",
+  "previous": "detector_y26n_640.onnx (y26n_640, no distractor training)"
+ },
+ "classifier": {
+  "file": "classifier_fp16.onnx",
+  "input": [
+   256,
+   160
+  ],
+  "attrs": [
+   [
+    "number",
+    [
+     1,
+     2,
+     3
+    ]
+   ],
+   [
+    "color",
+    [
+     "red",
+     "green",
+     "purple"
+    ]
+   ],
+   [
+    "shape",
+    [
+     "diamond",
+     "oval",
+     "squiggle"
+    ]
+   ],
+   [
+    "shading",
+    [
+     "solid",
+     "striped",
+     "open"
+    ]
+   ]
+  ],
+  "source": "runs/classify/effb0/weights/best.pt",
+  "size_mb": 8.12,
+  "precision": "fp16"
+ },
+ "parity_check": {
+  "photos": 25,
+  "cards": 155,
+  "max_corner_px": 36.425,
+  "max_prob_diff": 0.00010150671005249023,
+  "prediction_disagreements": 0
+ }
+}

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Take a photo of a SET game and find out whether there's a set, without spoilers.">
+<title>Set Solver</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <h1>Set Solver</h1>
+  <label class="switch" title="Show detected cards, crops, confidences and timings">
+    <input type="checkbox" id="debugToggle">
+    <span class="track" aria-hidden="true"></span>
+    Debug
+  </label>
+</header>
+
+<main>
+  <div class="loading" id="loading" role="status" aria-live="polite">
+    <div class="loading-text" id="loadingText">Loading models…</div>
+    <div class="bar"><div id="loadingBar"></div></div>
+  </div>
+
+  <!-- 1. pick a photo -->
+  <section class="panel capture" id="capture">
+    <p class="lead">Photograph the cards on the table from above, with every card in the frame.</p>
+    <div class="actions">
+      <label class="btn primary">
+        <input type="file" accept="image/*" capture="environment" id="takeInput" hidden>
+        <span aria-hidden="true">📷</span> Take photo
+      </label>
+      <label class="btn">
+        <input type="file" accept="image/*" id="uploadInput" hidden>
+        <span aria-hidden="true">⤒</span> Upload photo
+      </label>
+    </div>
+    <p class="hint">…or drop or paste an image here. Photos stay on your device: everything runs in your browser.</p>
+  </section>
+
+  <!-- 2. results -->
+  <section id="results" hidden>
+    <figure class="stage" id="stage">
+      <div class="stage-inner" id="stageInner"></div>
+      <div class="busy" id="busy" hidden><span class="spinner" aria-hidden="true"></span> Finding cards…</div>
+    </figure>
+
+    <div class="panel result" id="resultPanel">
+      <div class="summary">
+        <span class="count" id="cardCount"></span>
+        <span class="chips" id="chips"></span>
+      </div>
+
+      <div class="spoiler" id="spoiler">
+        <button type="button" class="btn primary big" id="revealBtn">Is there a set?</button>
+        <label class="check"><input type="checkbox" id="autoReveal"> Always show whether there's a set</label>
+      </div>
+
+      <div class="answer" id="answer" hidden>
+        <p class="headline" id="headline"></p>
+        <p class="subline" id="subline"></p>
+        <div class="set-controls" id="setControls"></div>
+        <p class="hint-text" id="hintText" aria-live="polite"></p>
+      </div>
+
+      <div class="actions end">
+        <button type="button" class="btn" id="newPhotoBtn">New photo</button>
+      </div>
+    </div>
+
+    <!-- 3. debug -->
+    <div class="panel debug" id="debugPanel" hidden>
+      <h2>Debug</h2>
+      <div class="debug-grid" id="debugStats"></div>
+      <h3>Detected cards</h3>
+      <p class="note">Each card straightened the way the classifier sees it, with its prediction and per-attribute probability. Tap a card to find it on the photo.</p>
+      <div class="cards" id="debugCards"></div>
+      <h3>Sets</h3>
+      <div id="debugSets" class="note"></div>
+      <div class="actions">
+        <button type="button" class="btn" id="downloadJson">Download results (JSON)</button>
+      </div>
+    </div>
+  </section>
+
+  <p class="error" id="error" role="alert" hidden></p>
+</main>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
