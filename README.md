@@ -40,17 +40,21 @@ Every scene is a real camera looking at one flat table (the plane z = 0, in mm):
    plane coordinates at the resolution the camera needs, then sampled per pixel.
 5. **Cards** are warped through the same `H` (rendered at the on-screen
    resolution, 2x supersampled), with drop shadows and contact occlusion.
-6. **Lighting** (`lighting.py`): eight rigs — neutral room LED, window
+6. **Card finish** (`surface.py`): most decks are fairly matte, but ~30% of
+   scenes use glossy cards with a linen texture; in most of those a lamp sits at
+   the mirror angle so its glare lands on a card, bleaching the ink toward white
+   and breaking into specks (the look that made real washed-out cards misread).
+7. **Lighting** (`lighting.py`): eight rigs — neutral room LED, window
    daylight, overcast/diffuse, fluorescent, phone flash, warm room, dim warm
    lamp, mixed warm+cool — weighted so ~3/4 of scenes are white light. Soft
    photographer shadows and object shadows (cup, phone/book, bottle/arm,
    irregular blob, blinds/slats), plus Blinn-Phong glare. Shading is evaluated
    in linear RGB from each pixel's plane position, so cards and table share
    the same light.
-7. **Occluders** (`occluders.py`, ~30% of scenes): fingers, coins, phones,
+8. **Occluders** (`occluders.py`, ~30% of scenes): fingers, coins, phones,
    pens, paper/sticky notes lying on or near the cards — they hide corners
    and edges, and paper is a white-rectangle hard negative.
-8. **Distractors** (`distractors.py`, ~35% of scenes, 1–4 each): flat
+9. **Distractors** (`distractors.py`, ~35% of scenes, 1–4 each): flat
    rectangles that are *not* SET cards — envelopes (front: address, stamp,
    postmark, barcode; back: flaps), books/magazines, e-readers/tablets/phones,
    playing cards (faces and backs), UNO/trading cards, ruled index cards,
@@ -59,7 +63,7 @@ Every scene is a real camera looking at one flat table (the plane z = 0, in mm):
    the frame edge, under the cards or occasionally on top. They carry no card
    labels, so the detector learns them as negatives. Tight shots with
    distractors are often framed a bit looser ("roomy") so they're in view.
-9. **Camera pipeline** (`sensor.py`): defocus/motion blur, vignetting, auto
+10. **Camera pipeline** (`sensor.py`): defocus/motion blur, vignetting, auto
    exposure, noise, *partial* auto white balance, tone curve, chroma denoise,
    sharpening, JPEG.
 
@@ -147,7 +151,10 @@ the app, cut-off cards are flagged for a retake instead of classified.
 Out-of-frame areas are filled black (never edge-replicated, which smears
 symbols into fake shapes). Training rotates crops by 180° (a card reads the
 same upside down) but never mirrors them (a mirrored squiggle isn't a card).
-Each run writes `slices.csv` (accuracy by lighting, background, card size,
+30% of training crops also get a painted glare patch (`crops.add_glare`,
+`--glare-prob`): soft washes or streaks, sometimes speckled, that fade the ink
+toward white. `--train/--val/--val-jitter` take several crop folders,
+comma-separated. Each run writes `slices.csv` (accuracy by lighting, background, card size,
 occlusion...) and `val_errors.jpg` (misclassified examples).
 
 ## Browser app (`web/`)
@@ -171,6 +178,11 @@ backends. Cards touching the photo edge are flagged "cut off" and not counted.
 uv run scripts/serve_web.py
 node web/tests/test.mjs   # set-finding + geometry tests
 ```
+
+**Real-photo check** (`scripts/eval_real.py`): runs two detector+classifier
+pairs over real photos the way the app counts cards and reports counts, labeled
+cards, full-deck photos (`*full_deck*`: every card once, so misreads show up as
+duplicates) and every disagreement, with crop sheets in `eval/` (git-ignored).
 
 **Model precision** (`scripts/quantize_models.py`, `scripts/compare_precision.py`,
 `web/bench.html`): fp16 halves the download with identical answers; int8 is not

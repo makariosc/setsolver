@@ -201,8 +201,14 @@ def shade(
     center: np.ndarray,
     key_visibility: np.ndarray,
     ambient_occlusion: np.ndarray,
+    slope_x: np.ndarray | None = None,
+    slope_y: np.ndarray | None = None,
 ) -> np.ndarray:
-    """Linear radiance = diffuse (Lambert) + specular (normalized Blinn-Phong)."""
+    """Linear radiance = diffuse (Lambert) + specular (normalized Blinn-Phong).
+
+    slope_x/slope_y: optional fine surface slopes (plane x/y) that tilt the
+    normal (-sx, -sy, 1) in the specular term only, e.g. a card's linen
+    texture breaking a highlight into specks."""
     Vx, Vy, Vz = camera_pos[0] - X, camera_pos[1] - Y, np.float32(camera_pos[2])
     vn = np.sqrt(Vx * Vx + Vy * Vy + Vz * Vz)
     Vx, Vy, Vz = Vx / vn, Vy / vn, Vz / vn
@@ -216,7 +222,11 @@ def shade(
             E = E * key_visibility
         diffuse = diffuse + (E[..., None] * light.color[None, None, :])
         Hx, Hy, Hz = Lx + Vx, Ly + Vy, Lz + Vz
-        NdotH = Hz / np.sqrt(Hx * Hx + Hy * Hy + Hz * Hz)
+        if slope_x is None:
+            NdotH = Hz / np.sqrt(Hx * Hx + Hy * Hy + Hz * Hz)
+        else:
+            NdotH = (Hz - Hx * slope_x - Hy * slope_y) / (
+                np.sqrt(Hx * Hx + Hy * Hy + Hz * Hz) * np.sqrt(1 + slope_x * slope_x + slope_y * slope_y))
         spec = gloss * (shininess + 8) / (8 * np.pi) * np.power(np.clip(NdotH, 0, 1), shininess) * E
         specular += spec[..., None] * light.color[None, None, :]
     return (albedo * diffuse + specular).astype(np.float32)

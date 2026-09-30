@@ -23,7 +23,9 @@ ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardw
 const variants = new URLSearchParams(location.search).get("v")?.split(",") ?? ["fp32", "fp16", "int8dyn", "int8qdq"];
 const models = new URLSearchParams(location.search).get("m")?.split(",") ?? ["detector", "classifier"];
 const backendsToTest = new URLSearchParams(location.search).get("b")?.split(",") ?? ["webgpu", "wasm"];
-const file = (m, v) => v === "fp32" ? `models/${m}.onnx` : `models/variants/${m}_${v}.onnx`;
+// ?dir=models/variants/v3 benchmarks a candidate export (fp32 at <dir>/, variants at <dir>/variants/)
+const dir = new URLSearchParams(location.search).get("dir") ?? "models";
+const file = (m, v) => v === "fp32" ? `${dir}/${m}.onnx` : `${dir}/variants/${m}_${v}.onnx`;
 // real inputs from the setchecker sample photos (written next to the variants): card crops and
 // letterboxed photos, RGB uint8 -> NCHW float 0..1
 const info = await (await fetch("models/variants/bench_inputs.json")).json();

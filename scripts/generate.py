@@ -54,6 +54,7 @@ def main():
     ap.add_argument("--only-layouts", type=lambda s: s.split(","), default=None)
     ap.add_argument("--only-distractors", type=lambda s: s.split(","), default=None)
     ap.add_argument("--distractor-prob", type=float, default=None, help="override SceneConfig.distractor_prob")
+    ap.add_argument("--glossy-prob", type=float, default=None, help="override SceneConfig.glossy_prob")
     ap.add_argument("--supersample", type=int, default=2,
                     help="render at N x the output size (2: crisper fine detail for classifier crops; "
                          "1: ~3.5x faster, plenty for detector training at 640 px)")
@@ -72,6 +73,8 @@ def main():
     )
     if a.distractor_prob is not None:
         cfg.distractor_prob = a.distractor_prob
+    if a.glossy_prob is not None:
+        cfg.glossy_prob = a.glossy_prob
     jobs = [(i, a.seed, a.out, cfg) for i in range(a.start, a.start + a.n)]
     t0 = time.time()
     n_clipped = 0

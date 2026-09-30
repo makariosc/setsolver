@@ -3,6 +3,9 @@
     .venv-train/bin/python scripts/train_classifier.py --name effb0 \
         --train data/crops/train --val data/crops/val --val-jitter data/crops/val_jitter
 
+Each of --train/--val/--val-jitter takes one crop folder or several,
+comma-separated (e.g. --train data/crops/train,data/crops/train_v3).
+
 Writes runs/classify/<name>/:
   results.csv     per-epoch losses/accuracies (charted by scripts/dashboard.py)
   progress.json   live in-epoch progress for the dashboard
@@ -37,14 +40,20 @@ from torchvision.io import ImageReadMode, decode_jpeg, read_file
 from torchvision.transforms import v2
 
 from setsolver.classifier import ATTRS, MEAN, STD, CardClassifier
+from setsolver.crops import add_glare
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
 class Crops(Dataset):
-    def __init__(self, root: Path, train: bool, limit: int | None = None):
-        self.root = root
-        self.rows = [json.loads(l) for l in (root / "index.jsonl").open()][:limit]
+    def __init__(self, roots: list[Path], train: bool, limit: int | None = None, glare_prob: float = 0.0):
+        self.glare_prob = glare_prob
+        self.rows = []
+        for root in roots:
+            rows = [json.loads(l) for l in (root / "index.jsonl").open()][:limit]
+            for r in rows:
+                r["_path"] = str(root / "images" / r["file"])
+            self.rows += rows
         self.y = torch.tensor([[values.index(r[name]) for name, values in ATTRS] for r in self.rows])
         norm = [v2.ToDtype(torch.float32, scale=True), v2.Normalize(MEAN, STD)]
         if train:
@@ -62,9 +71,12 @@ class Crops(Dataset):
         return len(self.rows)
 
     def __getitem__(self, i):
-        img = decode_jpeg(read_file(str(self.root / "images" / self.rows[i]["file"])), mode=ImageReadMode.RGB)
+        img = decode_jpeg(read_file(self.rows[i]["_path"]), mode=ImageReadMode.RGB)
         if self.train and torch.rand(()) < 0.5:
             img = img.flip(-1).flip(-2)  # 180-degree rotation (not a mirror)
+        if self.train and torch.rand(()) < self.glare_prob:
+            rng = np.random.default_rng(int(torch.randint(0, 2**62, ())))  # per-worker torch seed -> distinct patches
+            img = torch.from_numpy(add_glare(img.permute(1, 2, 0).numpy(), rng)).permute(2, 0, 1).contiguous()
         return self.tf(img), self.y[i], i
 
 
@@ -97,7 +109,7 @@ def write_error_grid(ds: Crops, pred: torch.Tensor, path: Path, max_n: int = 64)
     cells = []
     for i in pick:
         r = ds.rows[i]
-        im = cv2.imread(str(ds.root / "images" / r["file"]))
+        im = cv2.imread(r["_path"])
         cap = np.full((44, im.shape[1], 3), 255, np.uint8)
         t = " ".join(str(r[name]) for name, _ in ATTRS)
         p = " ".join(str(values[pred[i, a]]) if pred[i, a] != ds.y[i, a] else "·" for a, (name, values) in enumerate(ATTRS))
@@ -138,10 +150,11 @@ def write_slices(ds: Crops, pred: torch.Tensor, path: Path) -> list[list]:
 
 
 def main():
+    paths = lambda s: [Path(p) for p in s.split(",")]  # noqa: E731
     ap = argparse.ArgumentParser()
-    ap.add_argument("--train", type=Path, default=ROOT / "data/crops/train")
-    ap.add_argument("--val", type=Path, default=ROOT / "data/crops/val")
-    ap.add_argument("--val-jitter", type=Path, default=ROOT / "data/crops/val_jitter")
+    ap.add_argument("--train", type=paths, default=[ROOT / "data/crops/train"])
+    ap.add_argument("--val", type=paths, default=[ROOT / "data/crops/val"])
+    ap.add_argument("--val-jitter", type=paths, default=[ROOT / "data/crops/val_jitter"])
     ap.add_argument("--backbone", default="efficientnet_b0")
     ap.add_argument("--epochs", type=int, default=15)
     ap.add_argument("--batch", type=int, default=256)
@@ -152,6 +165,8 @@ def main():
     ap.add_argument("--project", type=Path, default=ROOT / "runs/classify")
     ap.add_argument("--name", default=None)
     ap.add_argument("--limit", type=int, default=None, help="use only the first N crops of each set (smoke tests)")
+    ap.add_argument("--glare-prob", type=float, default=0.3,
+                    help="fraction of training crops given a painted glare patch (crops.add_glare)")
     a = ap.parse_args()
 
     device = torch.device("cuda")
@@ -161,7 +176,7 @@ def main():
     (out / "args.yaml").write_text("".join(f"{k}: {v}\n" for k, v in {
         **{k: str(v) for k, v in vars(a).items()}, "model": a.backbone, "task": "classify"}.items()))
 
-    train_ds = Crops(a.train, True, a.limit)
+    train_ds = Crops(a.train, True, a.limit, glare_prob=a.glare_prob)
     val_ds, jit_ds = Crops(a.val, False, a.limit), Crops(a.val_jitter, False, a.limit)
     kw = dict(num_workers=a.workers, pin_memory=True, persistent_workers=True)
     train_dl = DataLoader(train_ds, a.batch, shuffle=True, drop_last=True, **kw)

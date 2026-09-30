@@ -240,9 +240,10 @@ def rounded_rect_mask(w_px: int, h_px: int, r_px: float) -> np.ndarray:
 
 
 def render_card(
-    card: Card, style: DeckStyle, px_per_mm: float, rng: np.random.Generator
-) -> tuple[np.ndarray, np.ndarray]:
-    """Render a card face. Returns (linear RGB albedo HxWx3, alpha HxW), portrait."""
+    card: Card, style: DeckStyle, px_per_mm: float, rng: np.random.Generator, with_ink: bool = False
+) -> tuple[np.ndarray, ...]:
+    """Render a card face. Returns (linear RGB albedo HxWx3, alpha HxW), portrait,
+    plus the ink coverage HxW (0..1) if `with_ink`."""
     s = px_per_mm
     w_px, h_px = int(round(CARD_W_MM * s)), int(round(CARD_H_MM * s))
 
@@ -296,4 +297,6 @@ def render_card(
     # Slightly darker cut edge.
     edge = 1 - cv2.erode(alpha, np.ones((3, 3), np.uint8), iterations=max(1, int(0.3 * s)))
     albedo *= (1 - 0.15 * np.clip(edge, 0, 1))[..., None]
+    if with_ink:
+        return albedo.astype(np.float32), alpha, cov
     return albedo.astype(np.float32), alpha

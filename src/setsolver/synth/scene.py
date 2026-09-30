@@ -19,9 +19,11 @@ from .camera import sample_camera
 from .cards import ALL_CARDS, CARD_H_MM, CARD_W_MM, DeckStyle, render_card
 from .distractors import DISTRACTORS, Distractor
 from .layout import LAYOUTS, Placement
-from .lighting import RIGS, LightingContext, LightingSetup, object_shadow, photographer_shadow, shade
+from .color import kelvin_to_linear_rgb
+from .lighting import RIGS, Light, LightingContext, LightingSetup, object_shadow, photographer_shadow, shade
 from .occluders import OCCLUDERS, Occluder, OccluderContext
 from .sensor import develop
+from .surface import CardFinish, render_finish
 
 MAX_BG_PIXELS = 9e6  # cap on the table-surface canvas
 
@@ -37,6 +39,8 @@ class SceneConfig:
     occluder_prob: float = 0.3  # scenes with objects lying on/near the cards (fingers, coins, paper...)
     distractor_prob: float = 0.35  # scenes with non-card rectangles in view (envelopes, books, playing cards...)
     roomy_prob: float = 0.5  # of tight shots with distractors: frame looser so they fit in view
+    glossy_prob: float = 0.3  # scenes with glossy cards (glare that washes out ink, linen speckle)
+    glare_light_prob: float = 0.75  # of glossy scenes: a lamp at the mirror angle so the glare lands on cards
     backgrounds: list[str] | None = None  # restrict to these names
     rigs: list[str] | None = None
     layouts: list[str] | None = None
@@ -102,13 +106,17 @@ class _Canvases:
     key_vis: np.ndarray
     ao: np.ndarray
     owner: np.ndarray
+    slope_x: np.ndarray  # fine surface slopes (plane x/y), specular only
+    slope_y: np.ndarray
 
 
 def _draw_flat(tex_rgb, tex_a, A, corners_ss, mag, lift, H_ss, setup, center_xy, rng, buf: _Canvases, owner_id: int,
-               obj_gloss: float, obj_shininess: float, min_blur_mm: float = 0.0) -> bool:
+               obj_gloss: float, obj_shininess: float, min_blur_mm: float = 0.0, surface=None) -> bool:
     """Composite a flat textured object lying on the table (card or distractor):
     warp its texture through the camera, add a drop shadow (blocks the key
     light) and a contact/ambient-occlusion ring. `A` maps texture px -> plane mm.
+    `surface` = (gloss map, slope_x, slope_y, angle) in texture space, for
+    per-texel gloss and fine bumps (cards); otherwise gloss is uniform.
     Returns False if it is entirely out of frame."""
     H_img, W_img = buf.owner.shape
     tex = np.dstack([tex_rgb * tex_a[..., None], tex_a])  # premultiplied RGBA
@@ -138,8 +146,20 @@ def _draw_flat(tex_rgb, tex_a, A, corners_ss, mag, lift, H_ss, setup, center_xy,
     buf.ao[sl] = buf.ao[sl] * (1 - a) + a
 
     buf.albedo[sl] = prem + buf.albedo[sl] * (1 - a[..., None])
-    buf.gloss[sl] = obj_gloss * a + buf.gloss[sl] * (1 - a)
     buf.shininess[sl] = obj_shininess * a + buf.shininess[sl] * (1 - a)
+    if surface is None:
+        buf.gloss[sl] = obj_gloss * a + buf.gloss[sl] * (1 - a)
+        buf.slope_x[sl] *= 1 - a
+        buf.slope_y[sl] *= 1 - a
+    else:
+        g_tex, sx_tex, sy_tex, angle = surface
+        # texture +x -> plane (cos, sin); texture +y (down) -> plane (sin, -cos): see _tex_to_plane
+        c, s_ = np.cos(angle), np.sin(angle)
+        maps = np.dstack([g_tex * tex_a, (sx_tex * c + sy_tex * s_) * tex_a, (sx_tex * s_ - sy_tex * c) * tex_a])
+        wm = cv2.warpPerspective(maps, M, (bw, bh), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+        buf.gloss[sl] = wm[..., 0] + buf.gloss[sl] * (1 - a)
+        buf.slope_x[sl] = wm[..., 1] + buf.slope_x[sl] * (1 - a)
+        buf.slope_y[sl] = wm[..., 2] + buf.slope_y[sl] * (1 - a)
     buf.owner[sl][a > 0.5] = owner_id
     return bool((a > 0.5).any())
 
@@ -342,9 +362,20 @@ def generate_scene(rng: np.random.Generator, cfg: SceneConfig = SceneConfig()) -
     ao = np.ones((H_img, W_img), np.float32)
     owner = np.full((H_img, W_img), -1, np.int16)
 
-    buf = _Canvases(albedo, gloss, shininess, key_vis, ao, owner)
-    card_gloss = rng.uniform(0.02, 0.08)
-    card_shininess = rng.uniform(15, 80)
+    buf = _Canvases(albedo, gloss, shininess, key_vis, ao, owner,
+                    np.zeros((H_img, W_img), np.float32), np.zeros((H_img, W_img), np.float32))
+    finish = CardFinish.sample(rng, glossy=rng.random() < cfg.glossy_prob)
+    card_gloss, card_shininess = finish.gloss, finish.shininess
+    glare_light = None
+    if finish.glossy and rng.random() < cfg.glare_light_prob:
+        # A ceiling lamp whose mirror reflection (seen from the camera) lands on a
+        # card: the broad glare that bleaches ink in real photos.
+        target = placements[rng.integers(len(placements))].center + rng.normal(0, 20, 2)
+        V = cam.C - np.array([target[0], target[1], 0.0])
+        R = np.array([-V[0], -V[1], V[2]]) / np.linalg.norm(V)
+        pos = np.array([target[0], target[1], 0.0]) + R * np.linalg.norm(V) * rng.uniform(0.8, 2.5)
+        glare_light = Light("point", kelvin_to_linear_rgb(rng.uniform(3200, 6500)), float(rng.uniform(0.3, 1.2)), position=pos)
+        setup.lights.append(glare_light)
     mm_to_px = []  # local magnification per card (SS px per mm)
 
     # --- distractors: non-card rectangles in view (hard negatives, unlabeled)
@@ -383,10 +414,11 @@ def generate_scene(rng: np.random.Generator, cfg: SceneConfig = SceneConfig()) -
         mag = _magnification(corners_ss, CARD_W_MM, CARD_H_MM)
         mm_to_px.append(mag)
         ppm = float(np.clip(mag, 3, 32))
-        tex_rgb, tex_a = render_card(card, style, ppm, rng)
+        tex_rgb, tex_a, ink = render_card(card, style, ppm, rng, with_ink=True)
+        g_tex, sx_tex, sy_tex = render_finish(finish, ink, ppm, rng)
         lift = rng.uniform(0.3, 1.5)  # mm; card thickness + curl
         _draw_flat(tex_rgb, tex_a, _card_to_plane(p, ppm), corners_ss, mag, lift, H_ss, setup, p.center, rng, buf, k,
-                   card_gloss, card_shininess)
+                   card_gloss, card_shininess, surface=(g_tex, sx_tex, sy_tex, p.angle))
 
     for d, center_xy, angle, layer in placed:
         if layer == "top" and draw_distractor(d, center_xy, angle):
@@ -410,6 +442,9 @@ def generate_scene(rng: np.random.Generator, cfg: SceneConfig = SceneConfig()) -
             if _draw_occluder(o, rng, X, Y, cam_ss, setup, albedo, gloss, shininess, key_vis, ao, owner):
                 occluders.append({"type": o.name, **o.info})
 
+    buf.slope_x[owner == -2] = 0  # occluders on top of cards are smooth
+    buf.slope_y[owner == -2] = 0
+
     # --- large soft shadows from things off-frame
     shadows = []
     if rng.random() < 0.35:
@@ -424,7 +459,8 @@ def generate_scene(rng: np.random.Generator, cfg: SceneConfig = SceneConfig()) -
         shadows.append({"type": "object", "shape": kind, "strength": strength})
 
     # --- light it
-    radiance = shade(albedo, gloss, shininess, X, Y, setup, cam.C, np.array([center[0], center[1]]), key_vis, ao)
+    radiance = shade(albedo, gloss, shininess, X, Y, setup, cam.C, np.array([center[0], center[1]]), key_vis, ao,
+                     buf.slope_x, buf.slope_y)
 
     # --- camera pipeline
     depth = (cam.R[2, 0] * X + cam.R[2, 1] * Y + cam.t[2]).astype(np.float32)
@@ -456,7 +492,9 @@ def generate_scene(rng: np.random.Generator, cfg: SceneConfig = SceneConfig()) -
         "framing": {"mode": framing, "occupancy": round(float(occupancy), 3)},
         "layout": layout.name,
         "background": {"name": bg_entry.name, **maps.info},
-        "lighting": {"rig": setup.name, "lights": [l.to_dict() for l in setup.lights], "ambient": setup.ambient.tolist(), **setup.info},
+        "lighting": {"rig": setup.name, "lights": [l.to_dict() for l in setup.lights], "ambient": setup.ambient.tolist(),
+                     "glare_light": glare_light is not None, **setup.info},
+        "card_finish": finish.to_dict(),
         "shadows": shadows,
         "occluders": occluders,
         "distractors": distractors,
