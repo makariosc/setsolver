@@ -1,5 +1,5 @@
 {
- "created": "2026-09-28 11:17:23",
+ "created": "2026-09-30 05:18:54",
  "detector": {
   "file": "detector_fp16.onnx",
   "imgsz": 640,
@@ -12,10 +12,10 @@
    17,
    8400
   ],
-  "source": "runs/pose/runs/detector/y26n_640_distr/weights/best.pt",
+  "source": "runs/pose/runs/detector/y26n_640_v3/weights/best.pt",
   "size_mb": 5.21,
   "precision": "fp16",
-  "previous": "detector_y26n_640.onnx (y26n_640, no distractor training)"
+  "previous": "y26n_640_distr (distractors, no glossy cards); fp16 kept in web/models/variants/v2/"
  },
  "classifier": {
   "file": "classifier_fp16.onnx",
@@ -57,15 +57,16 @@
     ]
    ]
   ],
-  "source": "runs/classify/effb0/weights/best.pt",
+  "source": "runs/classify/effb0_glare/weights/best.pt",
   "size_mb": 8.12,
-  "precision": "fp16"
+  "precision": "fp16",
+  "previous": "effb0 (no glare augmentation); fp16 kept in web/models/variants/v2/"
  },
  "parity_check": {
   "photos": 25,
-  "cards": 155,
-  "max_corner_px": 36.425,
-  "max_prob_diff": 0.00010150671005249023,
+  "cards": 154,
+  "max_corner_px": 71.55,
+  "max_prob_diff": 6.693601608276367e-05,
   "prediction_disagreements": 0
  }
 }
