@@ -1,6 +1,6 @@
 // Node tests for the pure JS modules:  node web/tests/test.mjs
 import assert from "node:assert/strict";
-import { aspectDev, cardShapeError, centroid, homography, portraitOrder, sideRatio } from "../js/geometry.js";
+import { aspectDev, cardShapeError, centroid, homography, portraitOrder, realCardDev, sideRatio } from "../js/geometry.js";
 import { readFileSync } from "node:fs";
 import { completeSet, findSets, isSet } from "../js/sets.js";
 
@@ -81,6 +81,11 @@ test("sideRatio / aspectDev", () => {
   const clipped = card(0).map(([x, y]) => [x, Math.min(y, 300)]);                   // bottom half squashed off
   assert.ok(aspectDev(clipped, [card(0), card(70)]) > 0.15);
   assert.ok(Math.abs(aspectDev(card(0), []) - Math.abs((171 / 267) / (57 / 88) - 1)) < 1e-9);  // no whole cards: real card ratio
+});
+test("realCardDev: a whole card ~0, a clipped one not", () => {
+  const whole = card(25, 114, 176);                                                  // 57:88 at 2 px/mm
+  assert.ok(realCardDev(whole) < 1e-9);
+  assert.ok(realCardDev(whole.map(([x, y]) => [x, Math.min(y, 300 + 20)])) > 0.10);  // most of the bottom cut off
 });
 test("cardShapeError matches src/setsolver/edge_gate.py card_shape_error", () => {
   for (const c of JSON.parse(readFileSync(new URL("./shape_cases.json", import.meta.url))))

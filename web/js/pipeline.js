@@ -4,7 +4,7 @@
 // Mirrors src/setsolver/crops.py so crops match what the classifier trained on.
 
 import * as ort from "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.webgpu.min.mjs";
-import { aspectDev, cardShapeError, centroid, dist, homography, portraitOrder } from "./geometry.js";
+import { aspectDev, cardShapeError, centroid, dist, homography, portraitOrder, realCardDev } from "./geometry.js";
 
 ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/";
 // Multi-threaded WASM needs cross-origin isolation (see scripts/serve_web.py).
@@ -18,14 +18,16 @@ const EDGE_MARGIN = 0.004;   // fraction of the short side: corners closer than 
 export const MIN_CONFIDENCE = 0.85;
 // Cards touching the photo edge are read too, but count only under a stricter
 // check (src/setsolver/edge_gate.py): every attribute at least EDGE_CONFIDENCE
-// sure, and the corners still describe a real card by either test: a card shape
-// under perspective (cardShapeError) or the same proportions as the photo's
-// whole cards (aspectDev). Corners squashed against the edge fail both. On
-// synthetic clipped cards: ~55% kept at 98.9% right with the YOLO detector,
+// sure, and the corners still describe a real card by any of three tests: a card
+// shape under perspective (cardShapeError), the same proportions as the photo's
+// whole cards (aspectDev), or a real card's 57:88 proportions (realCardDev).
+// Corners squashed against the edge fail all three. On synthetic clipped cards:
+// ~56% kept at 98.9% right with the YOLO detector,
 // ~98% at 99.7% with CardCornerNet (eval/clipped_gate.py); the rest stay "cut off".
 export const EDGE_CONFIDENCE = 0.95;
 export const EDGE_SHAPE_TOL = 0.15;
 export const EDGE_ASPECT_TOL = 0.15;
+export const EDGE_REAL_TOL = 0.10;
 
 let meta = null;
 const sessions = {};
@@ -267,11 +269,12 @@ export async function analyze(bitmap, { conf = meta?.detector.conf ?? 0.5 } = {}
     if (c.atEdge) {
       c.shapeErr = cardShapeError(c.corners, W, H);
       c.aspectDev = aspectDev(c.corners, whole);
-      const shapeOk = c.shapeErr <= EDGE_SHAPE_TOL || c.aspectDev <= EDGE_ASPECT_TOL;
+      c.realDev = realCardDev(c.corners);
+      const shapeOk = c.shapeErr <= EDGE_SHAPE_TOL || c.aspectDev <= EDGE_ASPECT_TOL || c.realDev <= EDGE_REAL_TOL;
       c.edgeRead = c.minP >= EDGE_CONFIDENCE && shapeOk;
       c.cutOff = !c.edgeRead;
       c.edgeWhy = c.minP < EDGE_CONFIDENCE ? `${c.leastSure} ${c.minP.toFixed(2)} < ${EDGE_CONFIDENCE}`
-        : `too much is cut off (shape ${c.shapeErr.toFixed(2)}, proportions ${c.aspectDev.toFixed(2)} > ${EDGE_SHAPE_TOL})`;
+        : `too much is cut off (shape ${c.shapeErr.toFixed(2)}, proportions ${c.aspectDev.toFixed(2)} / ${c.realDev.toFixed(2)})`;
     }
     c.rejected = c.cutOff || c.detLow || !!c.lowConf;
     c.rejectReason = c.cutOff ? `cut off by the photo edge (${c.edgeWhy})`

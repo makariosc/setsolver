@@ -80,6 +80,9 @@ export function aspectDev(corners, wholeCards) {
   return Math.abs(sideRatio(corners) / ref - 1);
 }
 
+/** |sideRatio / 57:88 - 1|: only a (nearly) whole card has a real card's proportions. */
+export const realCardDev = (corners) => Math.abs(sideRatio(corners) / (57 / 88) - 1);
+
 export function centroid(corners) {
   return [corners.reduce((a, p) => a + p[0], 0) / 4, corners.reduce((a, p) => a + p[1], 0) / 4];
 }
