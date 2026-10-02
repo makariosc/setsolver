@@ -174,13 +174,11 @@ function renderResult() {
   const r = state.result;
   const cards = r.cards;
   const classified = cards.filter((c) => c.idx && !c.rejected);  // the cards that count
-  const cut = cards.filter((c) => c.cutOff);
-  const unsure = cards.filter((c) => c.rejected && !c.cutOff);
+  const unsure = cards.filter((c) => c.rejected);
 
   $("cardCount").textContent = cards.length === 0 ? "No cards found"
     : `${classified.length} card${classified.length === 1 ? "" : "s"} found`;
   const chips = [];
-  if (cut.length) chips.push(el("span", { class: "chip warn" }, `⚠ ${cut.length} cut off at the edge`));
   if (unsure.length) chips.push(el("span", { class: "chip warn" }, `? ${unsure.length} not read confidently`));
   $("chips").replaceChildren(...chips);
 
@@ -247,7 +245,7 @@ function drawOverlay() {
   const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", "aria-hidden": "true" });
   const byId = new Map(r.cards.map((c) => [c.id, c]));
 
-  // every detected card: a thin outline (not a spoiler), dashed if cut off
+  // every detected card: a thin outline (not a spoiler), dashed if not counted
   for (const c of r.cards) {
     svg.append(sv("polygon", { points: pts(c.corners), class: "ov-halo" }));
     svg.append(sv("polygon", { points: pts(c.corners), class: `ov-card${c.rejected ? " ov-cut" : ""}` }));
@@ -278,8 +276,7 @@ function drawOverlay() {
   for (const c of r.cards) {
     const [cx, cy] = centroid(c.corners);
     let text = "";
-    if (state.debug) text = `#${c.id + 1}${c.cutOff ? " cut off" : c.rejected ? " ?" : ""}`;
-    else if (c.cutOff) text = "cut off";
+    if (state.debug) text = `#${c.id + 1}${c.rejected ? " ?" : ""}`;
     else if (c.rejected) text = "?";  // says nothing about sets, so not a spoiler
     if (!text) continue;
     const t = sv("text", { x: cx, y: cy, "text-anchor": "middle", "dominant-baseline": "middle", class: "ov-label", "font-size": fontPx });
@@ -320,7 +317,7 @@ function renderDebug() {
     } else {
       kids.push(el("div", { class: "ct-pred" }, cardName(c)));
       if (c.rejected) kids.push(el("div", { class: "flag warn" }, `not counted: ${c.rejectReason}`));
-      else if (c.edgeRead) kids.push(el("div", { class: "flag" }, `at the photo edge: read (shape ${c.shapeErr.toFixed(2)}, proportions ${c.aspectDev.toFixed(2)})`));
+      if (c.atEdge) kids.push(el("div", { class: "flag" }, "at the photo edge"));
       const probs = el("div", { class: "probs" });
       for (const [name] of Object.entries(c.probs)) {
         const p = c.p[name];
@@ -332,7 +329,7 @@ function renderDebug() {
     }
     return el("button", {
       type: "button", class: `card-tile${state.focus === c.id ? " active" : ""}`,
-      "aria-label": `Card ${c.id + 1}: ${c.cutOff ? "cut off" : cardName(c)}${c.rejected && !c.cutOff ? ", not counted" : ""}`,
+      "aria-label": `Card ${c.id + 1}: ${c.idx ? cardName(c) : "not read"}${c.rejected ? ", not counted" : ""}`,
       onclick: () => { state.focus = state.focus === c.id ? null : c.id; drawOverlay(); renderDebug(); },
     }, ...kids);
   }));

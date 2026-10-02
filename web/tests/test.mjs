@@ -1,7 +1,6 @@
 // Node tests for the pure JS modules:  node web/tests/test.mjs
 import assert from "node:assert/strict";
-import { aspectDev, cardShapeError, centroid, homography, portraitOrder, realCardDev, sideRatio } from "../js/geometry.js";
-import { readFileSync } from "node:fs";
+import { centroid, homography, portraitOrder } from "../js/geometry.js";
 import { completeSet, findSets, isSet } from "../js/sets.js";
 
 let passed = 0;
@@ -58,38 +57,5 @@ test("homography maps the 4 points exactly", () => {
 });
 test("centroid", () => assert.ok(near(centroid(card(40)), [300, 300])));
 
-// --- cardShapeError: a real card seen through a pinhole camera scores ~0
-const project = (tiltDeg, W = 1200, H = 900, fov = 70) => {
-  // 57x88 mm card on a table, camera tilted about the x axis, card at the image centre
-  const f = (Math.hypot(W, H) / 2) / Math.tan((fov * Math.PI) / 360), t = (tiltDeg * Math.PI) / 180, dist = 400;
-  return [[-28.5, -44], [28.5, -44], [28.5, 44], [-28.5, 44]].map(([x, y]) => {
-    const yc = y * Math.cos(t), zc = dist + y * Math.sin(t);
-    return [W / 2 + (f * x) / zc, H / 2 + (f * yc) / zc];
-  });
-};
-test("cardShapeError: true card shapes score ~0 at any tilt", () => {
-  for (const tilt of [0, 15, 30, 40]) assert.ok(cardShapeError(project(tilt), 1200, 900) < 0.02, `tilt ${tilt}`);
-});
-test("cardShapeError: a card squashed against the edge scores high", () => {
-  const q = project(10);
-  const squashed = q.map(([x, y]) => [Math.min(x, 610), y]);   // right half clamped to x=610
-  assert.ok(cardShapeError(squashed, 1200, 900) > 0.15);
-});
-test("sideRatio / aspectDev", () => {
-  assert.ok(Math.abs(sideRatio(card(30)) - 171 / 267) < 1e-9);
-  assert.ok(aspectDev(card(30), [card(0), card(70)]) < 1e-9);                       // same proportions as the others
-  const clipped = card(0).map(([x, y]) => [x, Math.min(y, 300)]);                   // bottom half squashed off
-  assert.ok(aspectDev(clipped, [card(0), card(70)]) > 0.15);
-  assert.ok(Math.abs(aspectDev(card(0), []) - Math.abs((171 / 267) / (57 / 88) - 1)) < 1e-9);  // no whole cards: real card ratio
-});
-test("realCardDev: a whole card ~0, a clipped one not", () => {
-  const whole = card(25, 114, 176);                                                  // 57:88 at 2 px/mm
-  assert.ok(realCardDev(whole) < 1e-9);
-  assert.ok(realCardDev(whole.map(([x, y]) => [x, Math.min(y, 300 + 20)])) > 0.10);  // most of the bottom cut off
-});
-test("cardShapeError matches src/setsolver/edge_gate.py card_shape_error", () => {
-  for (const c of JSON.parse(readFileSync(new URL("./shape_cases.json", import.meta.url))))
-    assert.ok(Math.abs(cardShapeError(c.q, c.w, c.h) - c.err) < 1e-4, `${cardShapeError(c.q, c.w, c.h)} vs ${c.err}`);
-});
 
 console.log(`${passed} tests passed`);
