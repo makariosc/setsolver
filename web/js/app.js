@@ -315,11 +315,12 @@ function renderDebug() {
     cv.width = c.crop.width; cv.height = c.crop.height;
     cv.getContext("2d").putImageData(c.crop, 0, 0);
     const kids = [cv, el("div", { class: "ct-head" }, `#${c.id + 1} · det ${c.score.toFixed(2)}`)];
-    if (c.cutOff) {
-      kids.push(el("div", { class: "flag warn" }, "cut off: not classified"));
+    if (!c.idx) {
+      kids.push(el("div", { class: "flag warn" }, "not classified"));
     } else {
       kids.push(el("div", { class: "ct-pred" }, cardName(c)));
       if (c.rejected) kids.push(el("div", { class: "flag warn" }, `not counted: ${c.rejectReason}`));
+      else if (c.edgeRead) kids.push(el("div", { class: "flag" }, `at the photo edge: read (shape ${c.shapeErr.toFixed(2)}, proportions ${c.aspectDev.toFixed(2)})`));
       const probs = el("div", { class: "probs" });
       for (const [name] of Object.entries(c.probs)) {
         const p = c.p[name];

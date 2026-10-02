@@ -40,6 +40,46 @@ export function homography(from, to) {
   return [h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7], 1];
 }
 
+/**
+ * How far a detected quad is from a real 57x88 mm card seen through a pinhole
+ * camera (diagonal FOV ~70 deg, typical of phones): 0 = a perfect card shape
+ * under some perspective. A homography from the card rectangle to the quad,
+ * pre-multiplied by K^-1, has a rotation's first two columns (up to scale) when
+ * the quad is a real card: score = their non-orthogonality + scale mismatch.
+ * Used to trust readings of cards cut off by the photo edge only when their
+ * (partly off-frame) corners still describe a plausible card.
+ * Mirrors card_shape_error in src/setsolver/edge_gate.py.
+ */
+export function cardShapeError(corners, W, H, fovDeg = 70) {
+  const f = (Math.hypot(W, H) / 2) / Math.tan((fovDeg * Math.PI) / 360);
+  const cx = (W - 1) / 2, cy = (H - 1) / 2;
+  let best = Infinity;
+  for (const [a, b] of [[57, 88], [88, 57]]) {   // either side may be the long one
+    const h = homography([[0, 0], [a, 0], [a, b], [0, b]], corners);
+    const col = (j) => [(h[j] - cx * h[6 + j]) / f, (h[3 + j] - cy * h[6 + j]) / f, h[6 + j]];
+    const c1 = col(0), c2 = col(1);
+    const n1 = Math.hypot(...c1), n2 = Math.hypot(...c2);
+    const dot = c1[0] * c2[0] + c1[1] * c2[1] + c1[2] * c2[2];
+    const err = Math.abs(dot) / (n1 * n2) + Math.abs(n1 - n2) / Math.max(n1, n2);
+    if (Number.isFinite(err)) best = Math.min(best, err);
+  }
+  return best;
+}
+
+/** Short / long side of a quad (means of opposite sides). Mirrors setsolver/edge_gate.py side_ratio. */
+export function sideRatio(c) {
+  const e = c.map((p, i) => dist(p, c[(i + 1) % 4]));
+  const a = (e[0] + e[2]) / 2, b = (e[1] + e[3]) / 2;
+  return Math.min(a, b) / Math.max(a, b);
+}
+
+/** |sideRatio / reference - 1|: reference is the median of the photo's whole cards, else a real card's 57/88. */
+export function aspectDev(corners, wholeCards) {
+  const rs = wholeCards.map(sideRatio).sort((x, y) => x - y);
+  const ref = rs.length ? (rs.length % 2 ? rs[(rs.length - 1) / 2] : (rs[rs.length / 2 - 1] + rs[rs.length / 2]) / 2) : 57 / 88;
+  return Math.abs(sideRatio(corners) / ref - 1);
+}
+
 export function centroid(corners) {
   return [corners.reduce((a, p) => a + p[0], 0) / 4, corners.reduce((a, p) => a + p[1], 0) / 4];
 }

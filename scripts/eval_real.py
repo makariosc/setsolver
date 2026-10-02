@@ -6,8 +6,8 @@
         --photos data/real/setchecker_samples data/real/glare --out eval/real
 
 Checks, per model pair, the way the app counts cards (detector score >= 0.85
-and every attribute probability >= 0.85; cards touching the photo edge are not
-classified):
+and every attribute probability >= 0.85; cards touching the photo edge count
+only if they also pass setsolver/edge_gate.py's stricter check):
 - photos named *full_deck*: all 81 cards, each exactly once -> every misread
   shows up as a duplicate + a missing card, no hand labels needed;
 - --counts JSON {photo: n}: detected card count;
@@ -33,6 +33,7 @@ import onnxruntime as ort
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from compare_precision import detect, match, to_batch  # noqa: E402
 from setsolver.crops import warp_card  # noqa: E402
+from setsolver.edge_gate import edge_card_ok  # noqa: E402
 
 ATTRS = [("number", [1, 2, 3]), ("color", ["red", "green", "purple"]),
          ("shape", ["diamond", "oval", "squiggle"]), ("shading", ["solid", "striped", "open"])]
@@ -47,7 +48,7 @@ def read_photo(det, cls, img):
     for s, q in detect(det, img):
         cut = bool(((q < margin) | (q > [w - 1 - margin, h - 1 - margin])).any())
         out.append({"score": s, "corners": q, "cut": cut})
-    todo = [c for c in out if not c["cut"]]
+    todo = out   # edge cards too: they count if they pass edge_gate's stricter check (as web/js/pipeline.js)
     if todo:
         crops = [warp_card(img, c["corners"]) for c in todo]
         probs = cls.run(None, {"crops": to_batch(crops)})[0]
@@ -55,8 +56,10 @@ def read_photo(det, cls, img):
             c["probs"], c["crop"] = p, cr
             c["label"] = tuple(vals[i] for (_, vals), i in zip(ATTRS, p.argmax(-1)))
             c["minp"] = float(p.max(-1).min())
+    whole = [c["corners"] for c in out if not c["cut"]]
     for c in out:
-        c["counted"] = (not c["cut"]) and c["score"] >= GATE and c["minp"] >= GATE
+        c["edge_ok"] = c["cut"] and edge_card_ok(c["corners"], c["minp"], w, h, whole)
+        c["counted"] = (not c["cut"] or c["edge_ok"]) and c["score"] >= GATE and c["minp"] >= GATE
     return out
 
 
@@ -65,8 +68,8 @@ def lab(c) -> str:
 
 
 def why(c) -> str:
-    if c["cut"]:
-        return "cut off"
+    if c["cut"] and not c["edge_ok"]:
+        return "cut off" if c["minp"] >= 0.95 else f"cut off (min p {c['minp']:.2f})"
     bits = [f"det {c['score']:.2f}"] if c["score"] < GATE else []
     for (name, vals), p in zip(ATTRS, c["probs"]):
         o = np.argsort(-p)
