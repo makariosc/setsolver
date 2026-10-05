@@ -12,9 +12,13 @@ ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardw
 
 const MAX_SIDE = 2048;       // working resolution for detection + crops
 const EDGE_MARGIN = 0.004;   // fraction of the short side: corners closer than this => "at the photo edge" (debug info only)
-// A card only counts toward sets if the detector is at least this sure it's a
-// card AND the classifier is at least this sure of every attribute. Lower
-// detections (down to meta.detector.conf) are still shown, marked rejected.
+// A card only counts toward sets if the detector is at least DETECT_MIN_CONFIDENCE
+// sure it's a card AND the classifier is at least MIN_CONFIDENCE sure of every
+// attribute. Lower detections (down to meta.detector.conf) are still shown, marked
+// rejected. The detection gate is lower: cards scoring 0.80-0.85 are mostly real,
+// far-away cards the classifier still reads right (+14 right / +1 wrong over 5,965
+// cards, eval/browser_runs), while lowering the attribute gate admits misreads.
+export const DETECT_MIN_CONFIDENCE = 0.80;
 export const MIN_CONFIDENCE = 0.85;
 
 let meta = null;
@@ -211,7 +215,7 @@ export async function analyze(bitmap, { conf = meta?.detector.conf ?? 0.5 } = {}
   const cards = raw.map((det, i) => {
     const corners = det.corners.map(([x, y]) => [(x - lb.px) / lb.r, (y - lb.py) / lb.r]);
     const atEdge = corners.some(([x, y]) => x < margin || y < margin || x > W - 1 - margin || y > H - 1 - margin);
-    return { id: i, score: det.score, corners, atEdge, detLow: det.score < MIN_CONFIDENCE };
+    return { id: i, score: det.score, corners, atEdge, detLow: det.score < DETECT_MIN_CONFIDENCE };
   });
   // number cards top-to-bottom, left-to-right, so debug indices read naturally
   const rowH = 0.5 * Math.min(W, H) / Math.max(3, Math.sqrt(cards.length));
@@ -253,7 +257,7 @@ export async function analyze(bitmap, { conf = meta?.detector.conf ?? 0.5 } = {}
   t.classify = performance.now();
   for (const c of cards) {
     c.rejected = c.detLow || !!c.lowConf;
-    c.rejectReason = c.detLow ? `detection ${c.score.toFixed(2)} < ${MIN_CONFIDENCE}`
+    c.rejectReason = c.detLow ? `detection ${c.score.toFixed(2)} < ${DETECT_MIN_CONFIDENCE}`
       : c.lowConf ? `${c.leastSure} ${c.minP.toFixed(2)} < ${MIN_CONFIDENCE}` : null;
   }
   return {

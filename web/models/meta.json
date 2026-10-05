@@ -1,7 +1,7 @@
 {
- "created": "2026-09-30 05:18:54",
+ "created": "2026-10-05 15:52:37",
  "detector": {
-  "file": "detector_fp16.onnx",
+  "file": "detector_fp32.onnx",
   "imgsz": 640,
   "keypoints": 4,
   "conf": 0.5,
@@ -12,10 +12,11 @@
    17,
    8400
   ],
-  "source": "runs/pose/runs/detector/y26n_640_v3/weights/best.pt",
-  "size_mb": 5.21,
-  "precision": "fp16",
-  "previous": "y26n_640_distr (distractors, no glossy cards); fp16 kept in web/models/variants/v2/"
+  "source": "runs/pose/runs/detector/y26n_640_v3_seated/weights/best.pt",
+  "size_mb": 10.27,
+  "precision": "fp32",
+  "previous": "y26n_640_v3 (no seated angles); kept in web/models/variants/v3/",
+  "note": "fp32 on purpose: the fp16 detector's corners shift by ~0.3 px (up to ~1.8) on WebGPU, enough to drop a borderline card below the classifier gate (eval/browser_runs); fp16 classifier is unaffected"
  },
  "classifier": {
   "file": "classifier_fp16.onnx",
@@ -57,16 +58,16 @@
     ]
    ]
   ],
-  "source": "runs/classify/effb0_glare/weights/best.pt",
+  "source": "runs/classify/effb0_glare_seated/weights/best.pt",
   "size_mb": 8.12,
   "precision": "fp16",
-  "previous": "effb0 (no glare augmentation); fp16 kept in web/models/variants/v2/"
+  "previous": "effb0_glare (no seated angles); kept in web/models/variants/v3/"
  },
  "parity_check": {
   "photos": 25,
   "cards": 154,
-  "max_corner_px": 71.55,
-  "max_prob_diff": 6.693601608276367e-05,
+  "max_corner_px": 71.659,
+  "max_prob_diff": 8.356571197509766e-05,
   "prediction_disagreements": 0
  }
 }

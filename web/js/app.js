@@ -1,4 +1,4 @@
-import { analyze, centroid, loadModels, MIN_CONFIDENCE } from "./pipeline.js";
+import { analyze, centroid, DETECT_MIN_CONFIDENCE, loadModels, MIN_CONFIDENCE } from "./pipeline.js";
 import { findSets } from "./sets.js";
 
 const $ = (id) => document.getElementById(id);
@@ -303,7 +303,7 @@ function renderDebug() {
     stat("Total", `${t.total.toFixed(0)} ms`, `prepare ${t.prepare.toFixed(0)} · detect ${t.detect.toFixed(0)} · crop ${t.crop.toFixed(0)} · classify ${t.classify.toFixed(0)} ms`),
     stat("Backends", `${r.backends.detector} / ${r.backends.classifier}`, "detector / classifier"),
     stat("Image", `${r.original[0]}×${r.original[1]}`, `analyzed at ${r.canvas.width}×${r.canvas.height}`),
-    stat("Detections", String(r.cards.length), `shown ≥ ${r.conf} · counted ≥ ${MIN_CONFIDENCE} · ${r.cards.filter((c) => c.rejected).length} rejected`),
+    stat("Detections", String(r.cards.length), `shown ≥ ${r.conf} · counted: detection ≥ ${DETECT_MIN_CONFIDENCE}, attributes ≥ ${MIN_CONFIDENCE} · ${r.cards.filter((c) => c.rejected).length} rejected`),
   );
 
   const cards = $("debugCards");

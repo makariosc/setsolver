@@ -12,11 +12,12 @@ wheels/
 # generated data
 data/
 
-# exported models (regenerate with scripts/export_onnx.py); the fp16 pair the
-# web app loads (see web/models/meta.json) is committed so GitHub Pages can serve it
+# exported models (regenerate with scripts/export_onnx.py); the files the web app
+# loads (named in web/models/meta.json) are committed so GitHub Pages can serve them
 web/models/*.onnx
 !web/models/detector_fp16.onnx
 !web/models/classifier_fp16.onnx
+!web/models/detector_fp32.onnx
 # fp16/int8 variants + bench inputs (crops of personal photos)
 web/models/variants/
 

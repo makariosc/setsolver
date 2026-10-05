@@ -5,7 +5,7 @@
         --b web/models/candidates/detector.onnx web/models/candidates/classifier.onnx --b-name new \
         --photos data/real/setchecker_samples data/real/glare --out eval/real
 
-Checks, per model pair, the way the app counts cards (detector score >= 0.85
+Checks, per model pair, the way the app counts cards (detector score >= 0.80
 and every attribute probability >= 0.85; cards cut off by the photo edge count
 like any other):
 - photos named *full_deck*: all 81 cards, each exactly once -> every misread
@@ -36,7 +36,8 @@ from setsolver.crops import warp_card  # noqa: E402
 
 ATTRS = [("number", [1, 2, 3]), ("color", ["red", "green", "purple"]),
          ("shape", ["diamond", "oval", "squiggle"]), ("shading", ["solid", "striped", "open"])]
-GATE = 0.85
+GATE = 0.85      # every attribute probability (web/js/pipeline.js MIN_CONFIDENCE)
+DET_GATE = 0.80  # detection score (DETECT_MIN_CONFIDENCE)
 EDGE = 0.004  # same cut-off rule as web/js/pipeline.js
 
 
@@ -56,7 +57,7 @@ def read_photo(det, cls, img):
             c["label"] = tuple(vals[i] for (_, vals), i in zip(ATTRS, p.argmax(-1)))
             c["minp"] = float(p.max(-1).min())
     for c in out:   # "cut" (touches the photo edge) is kept as information only
-        c["counted"] = c["score"] >= GATE and c["minp"] >= GATE
+        c["counted"] = c["score"] >= DET_GATE and c["minp"] >= GATE
     return out
 
 
@@ -65,7 +66,7 @@ def lab(c) -> str:
 
 
 def why(c) -> str:
-    bits = [f"det {c['score']:.2f}"] if c["score"] < GATE else []
+    bits = [f"det {c['score']:.2f}"] if c["score"] < DET_GATE else []
     for (name, vals), p in zip(ATTRS, c["probs"]):
         o = np.argsort(-p)
         if p[o[0]] < GATE:
